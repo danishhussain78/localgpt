@@ -15,6 +15,7 @@ from sentence_transformers import SentenceTransformer
 import chromadb
 from chromadb.config import Settings
 from dotenv import load_dotenv
+from datetime import datetime
 
 # ================================
 # Load environment variables
@@ -22,48 +23,78 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Use environment variable if provided
-OLLAMA_HOST = os.getenv("OLLAMA_HOST")
+OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 
 # Initialize embedding model
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
 
-# Initialize ChromaDB client
-chroma_client = chromadb.Client(Settings(
-    persist_directory="./chroma_db",
-    anonymized_telemetry=False
-))
+# Initialize ChromaDB client with persistent storage
+chroma_client = chromadb.PersistentClient(path="./chroma_db")
+
+
+# ================================
+# Helper Functions
+# ================================
+def get_user_collection_name(user_id):
+    """Generate unique collection name for each user."""
+    return f"user_{user_id}_documents"
+
+
+def get_unique_chunk_id(user_id, document_id, chunk_index):
+    """Generate globally unique chunk ID."""
+    return f"u{user_id}_doc{document_id}_chunk{chunk_index}"
 
 
 # ================================
 # Document Text Extraction
 # ================================
 def extract_text_from_pdf(file_path):
+    """Extract text from PDF file."""
     text = ""
     try:
         with open(file_path, "rb") as file:
             pdf_reader = PyPDF2.PdfReader(file)
             for page in pdf_reader.pages:
-                text += page.extract_text() + "\n"
+                extracted = page.extract_text()
+                if extracted:
+                    text += extracted + "\n"
     except Exception as e:
         print(f"Error extracting PDF: {e}")
     return text
 
 
 def extract_text_from_docx(file_path):
+    """Extract text from DOCX file."""
     text = ""
     try:
         doc = docx.Document(file_path)
         for paragraph in doc.paragraphs:
-            text += paragraph.text + "\n"
+            if paragraph.text.strip():
+                text += paragraph.text + "\n"
+        # Also extract text from tables
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    if cell.text.strip():
+                        text += cell.text + " "
+                text += "\n"
     except Exception as e:
         print(f"Error extracting DOCX: {e}")
     return text
 
 
 def extract_text_from_txt(file_path):
+    """Extract text from TXT file."""
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             return file.read()
+    except UnicodeDecodeError:
+        try:
+            with open(file_path, "r", encoding="latin-1") as file:
+                return file.read()
+        except Exception as e:
+            print(f"Error extracting TXT: {e}")
+            return ""
     except Exception as e:
         print(f"Error extracting TXT: {e}")
         return ""
@@ -71,12 +102,19 @@ def extract_text_from_txt(file_path):
 
 def chunk_text(text, chunk_size=500, overlap=50):
     """Split text into overlapping chunks."""
+    if not text or not text.strip():
+        return []
+    
     words = text.split()
+    if len(words) == 0:
+        return []
+    
     chunks = []
     for i in range(0, len(words), chunk_size - overlap):
         chunk = " ".join(words[i:i + chunk_size])
-        if chunk:
-            chunks.append(chunk)
+        if chunk.strip():
+            chunks.append(chunk.strip())
+    
     return chunks
 
 
@@ -84,12 +122,12 @@ def chunk_text(text, chunk_size=500, overlap=50):
 # Document Processing
 # ================================
 def process_document(document_id, user_id):
-    """Process document and store in vector database."""
+    """Process document and store in user-specific vector database."""
     try:
         document = Document.objects.get(id=document_id, user_id=user_id)
         file_path = document.file.path
 
-        # Extract text
+        # Extract text based on file type
         if file_path.endswith(".pdf"):
             text = extract_text_from_pdf(file_path)
         elif file_path.endswith(".docx"):
@@ -97,123 +135,209 @@ def process_document(document_id, user_id):
         elif file_path.endswith(".txt"):
             text = extract_text_from_txt(file_path)
         else:
+            print(f"Unsupported file type: {file_path}")
             return False
 
-        if not text.strip():
+        if not text or not text.strip():
+            print(f"No text extracted from document {document_id}")
             return False
 
+        # Chunk the text
         chunks = chunk_text(text)
-        collection_name = f"user_{user_id}_docs"
+        
+        if not chunks:
+            print(f"No chunks created from document {document_id}")
+            return False
 
+        # Get or create user-specific collection
+        collection_name = get_user_collection_name(user_id)
+        
         try:
             collection = chroma_client.get_collection(name=collection_name)
-        except:
-            collection = chroma_client.create_collection(name=collection_name)
-
-        for idx, chunk in enumerate(chunks):
-            embedding = embedding_model.encode(chunk).tolist()
-            collection.add(
-                embeddings=[embedding],
-                documents=[chunk],
-                ids=[f"doc_{document_id}_chunk_{idx}"],
-                metadatas=[{
-                    "document_id": document_id,
-                    "document_title": document.title
-                }]
+        except Exception:
+            collection = chroma_client.create_collection(
+                name=collection_name,
+                metadata={"user_id": str(user_id)}
             )
 
+        # Store chunks with user-specific IDs
+        embeddings_list = []
+        documents_list = []
+        ids_list = []
+        metadatas_list = []
+
+        for idx, chunk in enumerate(chunks):
+            try:
+                embedding = embedding_model.encode(chunk).tolist()
+                chunk_id = get_unique_chunk_id(user_id, document_id, idx)
+                
+                embeddings_list.append(embedding)
+                documents_list.append(chunk)
+                ids_list.append(chunk_id)
+                metadatas_list.append({
+                    "user_id": str(user_id),
+                    "document_id": str(document_id),
+                    "document_title": document.title,
+                    "chunk_index": idx,
+                    "timestamp": datetime.now().isoformat()
+                })
+            except Exception as e:
+                print(f"Error processing chunk {idx}: {e}")
+                continue
+
+        # Batch add all chunks
+        if embeddings_list:
+            try:
+                collection.add(
+                    embeddings=embeddings_list,
+                    documents=documents_list,
+                    ids=ids_list,
+                    metadatas=metadatas_list
+                )
+            except Exception as e:
+                print(f"Error adding to collection: {e}")
+                return False
+
+        # Mark document as processed
         document.is_processed = True
         document.save()
+        
+        print(f"Successfully processed document {document_id} with {len(chunks)} chunks")
         return True
+        
+    except Document.DoesNotExist:
+        print(f"Document {document_id} not found for user {user_id}")
+        return False
     except Exception as e:
         print(f"Error processing document: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
 def search_documents(user_id, query, top_k=3):
-    """Search for relevant chunks in user documents."""
+    """Search for relevant chunks in user-specific documents only."""
     try:
-        collection_name = f"user_{user_id}_docs"
+        collection_name = get_user_collection_name(user_id)
         collection = chroma_client.get_collection(name=collection_name)
+        
+        # Generate query embedding
         query_embedding = embedding_model.encode(query).tolist()
-        results = collection.query(query_embeddings=[query_embedding], n_results=top_k)
+        
+        # Search with user filter
+        results = collection.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k,
+            where={"user_id": str(user_id)}
+        )
 
-        if results and results["documents"]:
+        if results and results["documents"] and len(results["documents"]) > 0:
             return results["documents"][0]
         return []
+        
     except Exception as e:
-        print(f"Error searching documents: {e}")
+        print(f"Error searching documents for user {user_id}: {e}")
         return []
+
+
+def delete_user_document_chunks(user_id, document_id):
+    """Delete all chunks for a specific document."""
+    try:
+        collection_name = get_user_collection_name(user_id)
+        collection = chroma_client.get_collection(name=collection_name)
+        
+        # Get all chunks for this user
+        results = collection.get(where={"user_id": str(user_id)})
+        
+        # Filter out only the chunks for this document
+        ids_to_delete = [
+            _id for _id, meta in zip(results.get("ids", []), results.get("metadatas", []))
+            if meta.get("document_id") == str(document_id)
+        ]
+        
+        if ids_to_delete:
+            collection.delete(ids=ids_to_delete)
+            print(f"Deleted {len(ids_to_delete)} chunks for document {document_id}")
+            return True
+        return False
+        
+    except Exception as e:
+        print(f"Error deleting document chunks: {e}")
+        return False
+
 
 
 # ================================
-# LLaMA / Ollama Chat Function
+# LLaMA / Ollama Chat Function (FIXED)
 # ================================
 def ask_ollama(message, context_chunks=None):
     """
-    Sends a message to Ollama or open LLaMA API with optional document context.
-    Automatically adjusts format depending on the endpoint.
+    Sends a message to Ollama with optional document context.
+    Uses the correct /api/generate endpoint.
     """
-    # Build context if available
-    if context_chunks:
+    # Build the prompt
+    if context_chunks and len(context_chunks) > 0:
         context_text = "\n\n".join(
             [f"Context {i+1}:\n{chunk}" for i, chunk in enumerate(context_chunks)]
         )
-        prompt = f"""You are a helpful assistant. Use the following context to answer:
+        prompt = f"""You are a helpful assistant. Use the following context from the uploaded documents to answer the user's question. If the answer is not in the context, say so.
 
+Document Context:
 {context_text}
 
-User question: {message}
-"""
+User Question: {message}
+
+Answer:"""
     else:
         prompt = message
 
-    # Try Ollama-style JSON first
-    payload_ollama = {
+    # Ollama /api/generate endpoint format
+    payload = {
         "model": "llama3.2:1b",
-        "messages": [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt},
-        ],
-        "stream": False
-    }
-
-    # Try Open-LLaMA style JSON
-    payload_open = {
-        "model": "llama3.2:1b",
-        "prompt": prompt
+        "prompt": prompt,
+        "stream": False,
+        "options": {
+            "temperature": 0.7,
+            "top_p": 0.9
+        }
     }
 
     try:
-        # First try Ollama format
-        response = requests.post(f"{OLLAMA_HOST}/", json=payload_ollama, timeout=60)
-        if response.status_code == 422:
-            # Retry with open-API format
-            response = requests.post(f"{OLLAMA_HOST}/", json=payload_open, timeout=60)
-
+        response = requests.post(
+            f"{OLLAMA_HOST}/", 
+            json=payload, 
+            timeout=60
+        )
         response.raise_for_status()
         data = response.json()
 
-        # Handle both API styles
-        if "message" in data and "content" in data["message"]:
-            return data["message"]["content"]
-        elif "response" in data:
+        # Ollama returns "response" field
+        if "response" in data:
             return data["response"]
-        elif "text" in data:
-            return data["text"]
         else:
-            return json.dumps(data)
+            print(f"Unexpected response format: {data}")
+            return "Unexpected response format from Ollama."
 
+    except requests.exceptions.Timeout:
+        return "⏱️ Request timed out. Please try again."
+    except requests.exceptions.ConnectionError:
+        return f"❌ Could not connect to Ollama at {OLLAMA_HOST}. Please make sure Ollama is running."
+    except requests.exceptions.HTTPError as e:
+        print(f"HTTP Error: {e}")
+        print(f"Response content: {response.text if response else 'No response'}")
+        return f"Error communicating with Ollama: {str(e)}"
     except Exception as e:
-        print("Ollama API error:", e)
-        return "Sorry, I couldn't process your request."
+        print(f"Ollama API error: {e}")
+        import traceback
+        traceback.print_exc()
+        return "Sorry, I couldn't process your request. Please check if Ollama is running."
 
 
 # ================================
 # Chatbot Views
 # ================================
 def chatbot(request):
-    """Main chatbot page."""
+    """Main chatbot page with user-specific data."""
     chats = Chat.objects.filter(user=request.user).order_by("created_at")
     documents = Document.objects.filter(user=request.user).order_by("-uploaded_at")
 
@@ -222,14 +346,20 @@ def chatbot(request):
         if not message:
             return JsonResponse({"error": "Empty message"}, status=400)
 
+        # Check if user has processed documents
         has_documents = documents.filter(is_processed=True).exists()
 
         if has_documents:
+            # Search in user's documents only
             context_chunks = search_documents(request.user.id, message)
+            if context_chunks:
+                print(f"Found {len(context_chunks)} relevant chunks for query")
             response = ask_ollama(message, context_chunks)
         else:
+            # Regular chat without document context
             response = ask_ollama(message)
 
+        # Save chat for this user
         Chat.objects.create(
             user=request.user,
             message=message,
@@ -246,6 +376,7 @@ def chatbot(request):
 # Document Upload
 # ================================
 def upload_document(request):
+    """Handle document upload for specific user."""
     if request.method == "POST" and request.FILES.get("document"):
         file = request.FILES["document"]
         allowed_extensions = [".pdf", ".docx", ".txt"]
@@ -256,13 +387,22 @@ def upload_document(request):
                 "error": "Invalid file type. Only PDF, DOCX, and TXT files are allowed."
             }, status=400)
 
+        # Check file size (limit to 10MB)
+        if file.size > 10 * 1024 * 1024:
+            return JsonResponse({
+                "error": "File too large. Maximum size is 10MB."
+            }, status=400)
+
+        # Create document record for this user
         document = Document.objects.create(
             user=request.user,
             title=file.name,
             file=file
         )
 
+        # Process document
         success = process_document(document.id, request.user.id)
+        
         if success:
             return JsonResponse({
                 "success": True,
@@ -270,8 +410,13 @@ def upload_document(request):
                 "document_id": document.id
             })
         else:
+            # Clean up if processing failed
+            if document.file:
+                document.file.delete()
             document.delete()
-            return JsonResponse({"error": "Failed to process document."}, status=400)
+            return JsonResponse({
+                "error": "Failed to process document. Please ensure it contains readable text."
+            }, status=400)
 
     return JsonResponse({"error": "No file provided"}, status=400)
 
@@ -280,24 +425,33 @@ def upload_document(request):
 # Document Delete
 # ================================
 def delete_document(request, document_id):
+    """Delete a document and its embeddings for specific user."""
     try:
+        # Ensure document belongs to the requesting user
         document = Document.objects.get(id=document_id, user=request.user)
-        collection_name = f"user_{request.user.id}_docs"
-        try:
-            collection = chroma_client.get_collection(name=collection_name)
-            collection.delete(where={"document_id": document_id})
-        except Exception as e:
-            print(f"Error deleting from ChromaDB: {e}")
+        
+        # Delete from vector database
+        delete_user_document_chunks(request.user.id, document_id)
 
+        # Delete file from storage
         if document.file:
             document.file.delete()
+            
+        # Delete database record
         document.delete()
 
-        return JsonResponse({"success": True, "message": "Document deleted successfully"})
+        return JsonResponse({
+            "success": True,
+            "message": "Document deleted successfully"
+        })
+        
     except Document.DoesNotExist:
-        return JsonResponse({"error": "Document not found"}, status=404)
+        return JsonResponse({
+            "error": "Document not found or you don't have permission to delete it."
+        }, status=404)
     except Exception as e:
-        return JsonResponse({"error": str(e)}, status=400)
+        print(f"Error deleting document: {e}")
+        return JsonResponse({"error": "Failed to delete document."}, status=400)
 
 
 # ================================

@@ -30,16 +30,27 @@ html, body {
     background-color: #2c2c3e;
     font-size: 1.3rem;
     font-weight: bold;
-    text-align: center;
     border-bottom: 1px solid #3a3a4e;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 10px;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .header-title {
-    flex: 1;
-    text-align: center;
+    font-size: 1.3rem;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
 .btn-docs {
@@ -52,10 +63,160 @@ html, body {
     cursor: pointer;
     font-size: 0.85rem;
     transition: all 0.2s ease;
+    white-space: nowrap;
 }
 
 .btn-docs:hover {
     background-color: #0cc;
+    transform: translateY(-2px);
+}
+
+/* User Profile Button */
+.user-profile {
+    position: relative;
+}
+
+.user-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 15px;
+    background-color: #3a3a4e;
+    border: none;
+    border-radius: 20px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.user-button:hover {
+    background-color: #4a4a5e;
+    transform: translateY(-2px);
+}
+
+.user-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0ff, #00aaff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.85rem;
+    color: #000;
+}
+
+.user-name {
+    font-weight: 600;
+}
+
+.dropdown-arrow {
+    font-size: 0.7rem;
+    transition: transform 0.2s ease;
+}
+
+.user-button.active .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+/* User Dropdown Menu */
+.user-dropdown {
+    position: absolute;
+    top: 45px;
+    right: 0;
+    background-color: #2c2c3e;
+    border: 1px solid #3a3a4e;
+    border-radius: 10px;
+    min-width: 200px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.3s ease;
+    z-index: 1001;
+}
+
+.user-dropdown.active {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dropdown-header {
+    padding: 15px;
+    border-bottom: 1px solid #3a3a4e;
+}
+
+.dropdown-user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.dropdown-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0ff, #00aaff);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 1.1rem;
+    color: #000;
+}
+
+.dropdown-user-details h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.dropdown-user-details p {
+    margin: 5px 0 0 0;
+    font-size: 0.8rem;
+    color: #aaa;
+}
+
+.dropdown-menu {
+    padding: 10px 0;
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 15px;
+    color: #fff;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.dropdown-item:hover {
+    background-color: #3a3a4e;
+}
+
+.dropdown-item-icon {
+    font-size: 1.2rem;
+    width: 24px;
+    text-align: center;
+}
+
+.dropdown-divider {
+    height: 1px;
+    background-color: #3a3a4e;
+    margin: 5px 0;
+}
+
+.dropdown-item.logout {
+    color: #ff4444;
+}
+
+.dropdown-item.logout:hover {
+    background-color: rgba(255, 68, 68, 0.1);
 }
 
 /* Document Panel */
@@ -103,6 +264,11 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: transform 0.2s ease;
+}
+
+.btn-close:hover {
+    transform: rotate(90deg);
 }
 
 .panel-content {
@@ -176,12 +342,14 @@ html, body {
 
 .btn-upload:hover {
     background-color: #0cc;
+    transform: translateY(-2px);
 }
 
 .btn-upload:disabled {
     background-color: #555;
     cursor: not-allowed;
     color: #888;
+    transform: none;
 }
 
 .documents-list {
@@ -202,6 +370,7 @@ html, body {
 
 .document-item:hover {
     background-color: #333345;
+    transform: translateX(-5px);
 }
 
 .doc-info {
@@ -240,6 +409,7 @@ html, body {
 
 .btn-delete:hover {
     background-color: #cc0000;
+    transform: scale(1.05);
 }
 
 .messages-box {
@@ -353,30 +523,21 @@ html, body {
 
 .btn-send:hover {
     background-color: #0cc;
+    transform: translateY(-2px);
 }
 
-.messages-box::-webkit-scrollbar {
-    width: 8px;
-}
-
-.messages-box::-webkit-scrollbar-thumb {
-    background: #0ff;
-    border-radius: 4px;
-}
-
-.messages-box::-webkit-scrollbar-track {
-    background: transparent;
-}
-
+.messages-box::-webkit-scrollbar,
 .panel-content::-webkit-scrollbar {
     width: 8px;
 }
 
+.messages-box::-webkit-scrollbar-thumb,
 .panel-content::-webkit-scrollbar-thumb {
     background: #0ff;
     border-radius: 4px;
 }
 
+.messages-box::-webkit-scrollbar-track,
 .panel-content::-webkit-scrollbar-track {
     background: transparent;
 }
@@ -394,8 +555,21 @@ html, body {
     }
     
     .chat-header {
-        font-size: 1.1rem;
+        font-size: 1rem;
         padding: 10px 15px;
+    }
+    
+    .header-title {
+        font-size: 1.1rem;
+    }
+    
+    .user-name {
+        display: none;
+    }
+    
+    .btn-docs {
+        padding: 6px 12px;
+        font-size: 0.8rem;
     }
     
     .message-input {
@@ -419,8 +593,21 @@ html, body {
     }
     
     .chat-header {
-        font-size: 1rem;
+        font-size: 0.9rem;
         padding: 8px 12px;
+    }
+    
+    .header-title {
+        font-size: 1rem;
+    }
+    
+    .btn-docs {
+        padding: 6px 10px;
+        font-size: 0.75rem;
+    }
+    
+    .user-button {
+        padding: 6px 10px;
     }
     
     .message-input {
@@ -443,9 +630,47 @@ html, body {
 {% block content %}
 <div class="chat-container">
     <div class="chat-header">
-        <button class="btn-docs" onclick="toggleDocPanel()">📄 Documents</button>
+        <div class="header-left">
+            <button class="btn-docs" onclick="toggleDocPanel()">📄 Documents</button>
+        </div>
         <div class="header-title">AI Chatbot</div>
-        <div style="width: 100px;"></div> <!-- Spacer for centering -->
+        <div class="header-right">
+            <div class="user-profile">
+                <button class="user-button" onclick="toggleUserDropdown(event)">
+                    <div class="user-avatar">{{ request.user.username|first|upper }}</div>
+                    <span class="user-name">{{ request.user.username }}</span>
+                    <span class="dropdown-arrow">▼</span>
+                </button>
+                
+                <div class="user-dropdown" id="userDropdown">
+                    <div class="dropdown-header">
+                        <div class="dropdown-user-info">
+                            <div class="dropdown-avatar">{{ request.user.username|first|upper }}</div>
+                            <div class="dropdown-user-details">
+                                <h4>{{ request.user.username }}</h4>
+                                <p>{{ request.user.email }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="dropdown-menu">
+                        <a href="#" class="dropdown-item" onclick="showProfile(); return false;">
+                            <span class="dropdown-item-icon">👤</span>
+                            <span>Profile</span>
+                        </a>
+                        <a href="#" class="dropdown-item" onclick="showSettings(); return false;">
+                            <span class="dropdown-item-icon">⚙️</span>
+                            <span>Settings</span>
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <a href="{% url 'logout' %}" class="dropdown-item logout">
+                            <span class="dropdown-item-icon">🚪</span>
+                            <span>Sign Out</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="messages-box">
@@ -546,9 +771,58 @@ function scrollToBottom() {
 
 window.addEventListener('load', scrollToBottom);
 
+// Toggle document panel
 function toggleDocPanel() {
     const panel = document.getElementById('docPanel');
     panel.classList.toggle('active');
+}
+
+// Toggle user dropdown - IMPROVED VERSION
+function toggleUserDropdown(event) {
+    if (event) event.stopPropagation();
+    const dropdown = document.getElementById('userDropdown');
+    const button = document.querySelector('.user-button');
+    
+    // Toggle active states
+    const isActive = dropdown.classList.contains('active');
+    dropdown.classList.toggle('active');
+    button.classList.toggle('active');
+    
+    console.log('Dropdown toggled:', !isActive); // Debug log
+}
+
+// Close dropdowns when clicking outside - IMPROVED VERSION
+document.addEventListener('click', (e) => {
+    const userProfile = document.querySelector('.user-profile');
+    const userDropdown = document.getElementById('userDropdown');
+    const docPanel = document.getElementById('docPanel');
+    
+    // Close user dropdown if clicking outside
+    if (userProfile && !userProfile.contains(e.target)) {
+        userDropdown.classList.remove('active');
+        document.querySelector('.user-button').classList.remove('active');
+    }
+    
+    // Close doc panel if clicking outside
+    if (docPanel && !docPanel.contains(e.target) && !e.target.classList.contains('btn-docs')) {
+        docPanel.classList.remove('active');
+    }
+});
+
+// Prevent dropdown from closing when clicking inside it
+document.getElementById('userDropdown')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+});
+
+// Profile and Settings (placeholder functions)
+function showProfile() {
+    alert('Profile page - Coming soon!');
+    toggleUserDropdown();
+}
+
+function showSettings() {
+    alert('Settings page - Coming soon!');
+    toggleUserDropdown();
 }
 
 // File input display
@@ -624,6 +898,7 @@ async function deleteDocument(docId) {
     }
 }
 
+// Typing animation
 function typeMessage(container, text, callback) {
     let index = 0;
     const interval = setInterval(() => {
@@ -637,6 +912,7 @@ function typeMessage(container, text, callback) {
     }, 20);
 }
 
+// Message form submission
 messageForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const message = messageInput.value.trim();
@@ -664,7 +940,7 @@ messageForm.addEventListener('submit', (e) => {
     responseItem.innerHTML = `
         <div class="avatar"></div>
         <div class="message-text">
-            <div><b>AI Chatbot:</b> <span class="typing"></span></div>
+            <div><b>AI Chatbot:</b> <span class="typing">Thinking...</span></div>
             <div class="message-timestamp">${time}</div>
         </div>`;
     messagesList.appendChild(responseItem);
@@ -680,6 +956,7 @@ messageForm.addEventListener('submit', (e) => {
     })
     .then(res => res.json())
     .then(data => {
+        typingSpan.innerHTML = '';
         typeMessage(typingSpan, data.response);
     })
     .catch(err => {

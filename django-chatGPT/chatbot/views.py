@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
-from django.contrib import auth
+from django.contrib import auth, messages
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.files.storage import default_storage
@@ -470,23 +470,29 @@ def login(request):
 
 
 def register(request):
+    """Handle new user registration."""
     if request.method == "POST":
-        username = request.POST["username"]
-        email = request.POST["email"]
-        password1 = request.POST["password1"]
-        password2 = request.POST["password2"]
+        username = request.POST.get("username", "").strip()
+        email = request.POST.get("email", "").strip()
+        password1 = request.POST.get("password1", "")
+        password2 = request.POST.get("password2", "")
 
-        if password1 != password2:
-            return render(request, "register.html", {"error_message": "Passwords do not match"})
-
-        try:
+        # Validation
+        if not username or not email or not password1 or not password2:
+            messages.error(request, "All fields are required.")
+        elif password1 != password2:
+            messages.error(request, "Passwords do not match.")
+        elif User.objects.filter(username=username).exists():
+            messages.error(request, "Username already taken.")
+        elif User.objects.filter(email=email).exists():
+            messages.error(request, "Email already in use.")
+        else:
             user = User.objects.create_user(username=username, email=email, password=password1)
             auth.login(request, user)
             return redirect("chatbot")
-        except Exception as e:
-            return render(request, "register.html", {"error_message": f"Error creating account: {e}"})
 
     return render(request, "register.html")
+
 
 
 def logout(request):

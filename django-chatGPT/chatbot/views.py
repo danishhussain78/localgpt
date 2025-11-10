@@ -7,7 +7,7 @@ from django.core.files.storage import default_storage
 from .models import Chat, Document
 
 import requests
-import json
+from pathlib import Path
 import os
 import PyPDF2
 import docx
@@ -17,13 +17,23 @@ from chromadb.config import Settings
 from dotenv import load_dotenv
 from datetime import datetime
 
-# ================================
-# Load environment variables
-# ================================
-load_dotenv()
+# ====================================
+# Load .env file (force override)
+# ====================================
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env", override=True)  # ✅ important
 
-# Use environment variable if provided
+# ====================================
+# Ollama Host Configuration
+# ====================================
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+
+# Fix in case user forgot "http://"
+if not OLLAMA_HOST.startswith("http"):
+    OLLAMA_HOST = f"http://{OLLAMA_HOST}"
+
+print("✅ Using Ollama Host:", OLLAMA_HOST)
+
 
 # Initialize embedding model
 embedding_model = SentenceTransformer("all-MiniLM-L6-v2")

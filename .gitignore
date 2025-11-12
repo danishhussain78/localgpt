@@ -3,5 +3,5 @@
 # Ignore Python cache files
 __pycache__/
 *.py[cod]
-*db.sqlite3
+db.sqlite3
 chroma_db/

@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.files.storage import default_storage
 from .models import Chat, Document
+from django.contrib.auth.decorators import login_required
 
 import requests
 from pathlib import Path
@@ -346,6 +347,8 @@ Answer:"""
 # ================================
 # Chatbot Views
 # ================================
+
+@login_required(login_url='login')
 def chatbot(request):
     """Main chatbot page with user-specific data."""
     chats = Chat.objects.filter(user=request.user).order_by("created_at")
